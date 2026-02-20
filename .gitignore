@@ -39,3 +39,20 @@
 
 # debug information files
 *.dwo
+
+# macOS
+.DS_Store
+
+# CMake
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+Makefile
+
+# direnv/local environment
+.envrc
+.envrc.local

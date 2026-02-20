@@ -1,0 +1,17 @@
+# Copy this file to .envrc and run: direnv allow
+#
+# Option 1 (recommended): set an explicit Qt prefix.
+# QT_ROOT="/path/to/Qt/<version>/macos"
+#
+# Option 2: auto-detect latest Qt in a base directory.
+QT_BASE="$HOME/Qt"
+qt_latest="$(ls -d "$QT_BASE"/*/macos 2>/dev/null | sort -V | tail -n1)"
+if [ -n "$qt_latest" ]; then
+  export QT_ROOT="$qt_latest"
+fi
+
+if [ -z "${QT_ROOT:-}" ]; then
+  echo "QT_ROOT is not set. Set it in .envrc."
+else
+  export PATH="$QT_ROOT/bin:$PATH"
+fi
