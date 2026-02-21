@@ -46,6 +46,7 @@
 # CMake
 build/
 build-*/
+.cache/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
