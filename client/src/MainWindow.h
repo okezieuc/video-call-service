@@ -1,5 +1,7 @@
 #pragma once
 
+#include "FrameHandler.h"
+
 #include <QMainWindow>
 #include <QMediaCaptureSession>
 #include <QPermissions>
@@ -8,8 +10,8 @@ class QCamera;
 class QCameraPermission;
 class QPushButton;
 class QVBoxLayout;
-class QVideoWidget;
 class QWidget;
+class VideoSink;
 
 class MainWindow : public QMainWindow {
 public:
@@ -23,7 +25,9 @@ private:
     // Camera-related
     QCamera* camera = nullptr;
     QMediaCaptureSession captureSession;
-    QVideoWidget* videoPreview = nullptr;
     QCameraPermission cameraPermission; 
+    QVideoSink* videoSink;
+
+    FrameHandler* videoFrameHandler;
 };
 

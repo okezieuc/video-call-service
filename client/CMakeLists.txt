@@ -8,6 +8,8 @@ set(CMAKE_AUTORCC ON)
 
 add_executable(video_call_client
     src/main.cpp
+    src/FrameHandler.cpp
+    src/FrameHandler.h
     src/MainWindow.cpp
     src/MainWindow.h
 )
