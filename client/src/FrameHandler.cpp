@@ -3,7 +3,6 @@
 #include <QVideoFrame>
 
 void FrameHandler::receiveFrame(const QVideoFrame &frame) {
-  qInfo("a frame was received");
-
+  emit newFrameAvailable(frame); 
   return;
 }

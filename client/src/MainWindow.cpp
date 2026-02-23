@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "FrameHandler.h"
+#include "VideoPreview.h"
 
 #include <QApplication>
 #include <QCamera>
@@ -30,7 +31,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   central = new QWidget(this);
   layout = new QVBoxLayout(central);
   joinCallButton = new QPushButton("Join Call", central);
+  videoPreviewArea = new VideoPreview();
   layout->addWidget(joinCallButton);
+  layout->addWidget(videoPreviewArea);
   setCentralWidget(central);
   setWindowTitle("Video Call Client");
   resize(480, 320);
@@ -39,6 +42,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   videoFrameHandler = new FrameHandler;
   connect(videoSink, &QVideoSink::videoFrameChanged, videoFrameHandler,
           &FrameHandler::receiveFrame);
+  connect(videoFrameHandler, &FrameHandler::newFrameAvailable, videoPreviewArea,
+          &VideoPreview::updateNextFrame);
 
   camera = new QCamera;
   captureSession.setCamera(camera);

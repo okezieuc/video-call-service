@@ -12,6 +12,8 @@ add_executable(video_call_client
     src/FrameHandler.h
     src/MainWindow.cpp
     src/MainWindow.h
+    src/VideoPreview.h
+    src/VideoPreview.cpp
 )
 
 target_link_libraries(video_call_client PRIVATE Qt6::Core Qt6::Widgets Qt6::Multimedia Qt6::MultimediaWidgets)

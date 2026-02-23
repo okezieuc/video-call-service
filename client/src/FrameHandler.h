@@ -11,4 +11,7 @@ public:
 
 public slots:
   void receiveFrame(const QVideoFrame &frame);
+
+signals:
+  void newFrameAvailable(const QVideoFrame &frame);
 };
