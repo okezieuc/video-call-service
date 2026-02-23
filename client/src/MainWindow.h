@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FrameHandler.h"
+#include "VideoPreview.h"
 
 #include <QMainWindow>
 #include <QMediaCaptureSession>
@@ -29,5 +30,6 @@ private:
     QVideoSink* videoSink;
 
     FrameHandler* videoFrameHandler;
+    VideoPreview* videoPreviewArea;
 };
 
