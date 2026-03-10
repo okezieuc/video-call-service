@@ -15,7 +15,7 @@
 #include <QVideoSink>
 #include <QWidget>
 
-bool checkCameraAvailability() {
+bool MainWindow::isCameraAvailable() const {
   if (QMediaDevices::videoInputs().count() > 0)
     return true;
   else
@@ -23,7 +23,7 @@ bool checkCameraAvailability() {
 }
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-  if (!checkCameraAvailability()) {
+  if (!isCameraAvailable()) {
     qInfo("A camera is not available");
     return;
   }

@@ -16,20 +16,23 @@ class VideoSink;
 
 class MainWindow : public QMainWindow {
 public:
-    explicit MainWindow(QWidget* parent = nullptr);
+  explicit MainWindow(QWidget *parent = nullptr);
+
+protected:
+  virtual bool isCameraAvailable() const;
+
 private:
-    // Layout
-    QWidget* central = nullptr;
-    QVBoxLayout* layout = nullptr;
-    QPushButton* joinCallButton = nullptr;
+  // Layout
+  QWidget *central = nullptr;
+  QVBoxLayout *layout = nullptr;
+  QPushButton *joinCallButton = nullptr;
 
-    // Camera-related
-    QCamera* camera = nullptr;
-    QMediaCaptureSession captureSession;
-    QCameraPermission cameraPermission; 
-    QVideoSink* videoSink;
+  // Camera-related
+  QCamera *camera = nullptr;
+  QMediaCaptureSession captureSession;
+  QCameraPermission cameraPermission;
+  QVideoSink *videoSink;
 
-    FrameHandler* videoFrameHandler;
-    VideoPreview* videoPreviewArea;
+  FrameHandler *videoFrameHandler;
+  VideoPreview *videoPreviewArea;
 };
-
