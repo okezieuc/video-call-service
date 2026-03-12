@@ -5,7 +5,5 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-enable_testing()
-
 include(GoogleTest)
 add_subdirectory(client)

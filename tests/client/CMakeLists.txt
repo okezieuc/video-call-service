@@ -1,8 +1,9 @@
 add_executable(video_call_client_test
+  main.cpp
   MainWindowTest.cpp
 )
 target_link_libraries(video_call_client_test PRIVATE
-  GTest::gtest_main
+  GTest::gtest
   video_call_client_lib
 )
 
