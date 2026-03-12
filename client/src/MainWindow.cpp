@@ -15,19 +15,7 @@
 #include <QVideoSink>
 #include <QWidget>
 
-bool checkCameraAvailability() {
-  if (QMediaDevices::videoInputs().count() > 0)
-    return true;
-  else
-    return false;
-}
-
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-  if (!checkCameraAvailability()) {
-    qInfo("A camera is not available");
-    return;
-  }
-
   central = new QWidget(this);
   layout = new QVBoxLayout(central);
   joinCallButton = new QPushButton("Join Call", central);
@@ -49,17 +37,48 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   captureSession.setCamera(camera);
   captureSession.setVideoOutput(videoSink);
 
-  switch (qApp->checkPermission(cameraPermission)) {
-  case Qt::PermissionStatus::Undetermined:
-    qApp->requestPermission(cameraPermission, camera, &QCamera::start);
-    return;
-  case Qt::PermissionStatus::Denied:
-    qInfo("This app does not have the permission to access the camera.");
-    return;
-  case Qt::PermissionStatus::Granted:
-    camera->start();
+  connect(joinCallButton, &QPushButton::clicked, this, []() {});
+}
+
+void MainWindow::updateCameraStatus() {
+  if (videoInputCount() == 0) {
+    cameraStatus.deviceHasCamera = Tristate::False;
     return;
   }
 
-  connect(joinCallButton, &QPushButton::clicked, this, []() {});
+  cameraStatus.deviceHasCamera = Tristate::True;
+  switch (checkCameraPermissionStatus()) {
+  case Qt::PermissionStatus::Undetermined:
+    requestCameraPermission();
+    cameraStatus.isPermissionGranted = Tristate::Unknown;
+    break;
+  case Qt::PermissionStatus::Denied:
+    qInfo("This app does not have the permission to access the camera.");
+    cameraStatus.isPermissionGranted = Tristate::False;
+    break;
+  case Qt::PermissionStatus::Granted:
+    cameraStatus.isPermissionGranted = Tristate::True;
+    break;
+  }
+
+  // TODO: Move the logic for starting the camera to a more well thought out
+  // place
+  if (cameraStatus.isPermissionGranted == Tristate::True) {
+    startCamera();
+  }
+}
+
+Qt::PermissionStatus MainWindow::checkCameraPermissionStatus() const {
+  return qApp->checkPermission(cameraPermission);
+}
+
+void MainWindow::requestCameraPermission() {
+  qApp->requestPermission(cameraPermission, this,
+                          &MainWindow::updateCameraStatus);
+}
+
+void MainWindow::startCamera() { camera->start(); }
+
+int MainWindow::videoInputCount() const {
+  return QMediaDevices::videoInputs().count();
 }
