@@ -53,6 +53,8 @@ CMakeCache.txt
 cmake_install.cmake
 compile_commands.json
 Makefile
+_deps/
+client/.qt/
 
 # direnv/local environment
 .envrc
