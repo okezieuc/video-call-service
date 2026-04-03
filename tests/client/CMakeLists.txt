@@ -1,5 +1,6 @@
 add_executable(video_call_client_test
   main.cpp
+  FrameHandlerTest.cpp
   MainWindowTest.cpp
 )
 target_link_libraries(video_call_client_test PRIVATE

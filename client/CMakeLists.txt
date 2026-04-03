@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 find_package(PkgConfig REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia MultimediaWidgets)
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavutil)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavutil libswscale)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
