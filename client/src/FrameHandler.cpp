@@ -19,9 +19,23 @@ void FrameHandler::receiveFrame(const QVideoFrame &receivedFrame) {
     return;
 
   QVideoFrame frame(receivedFrame);
-
   if (!frame.map(QVideoFrame::MapMode::ReadOnly))
     return;
+
+  // TODO: The frame metadata is not guaranteed to remain fixed over the lifetime
+  // of the program. Instead of cacing the metadata permanently, only cache the
+  // sws_ctx which is expensive to recreate and only recreate it whenever the frame
+  // metadata changes.
+  if (!initializedFrameMetaData) {
+    frameMetaData = FrameMetaData{frame.width(), frame.height(),
+                                  AV_PIX_FMT_BGRA, frame.planeCount()};
+
+    for (int i = 0; i < frame.planeCount(); i++) {
+      frameMetaData.linesize[i] = frame.bytesPerLine(i);
+    }
+
+    initializedFrameMetaData = true;
+  }
 
   auto converted_frame = convertPixelFormat(frame);
   frame.unmap();
@@ -37,22 +51,23 @@ void FrameHandler::receiveFrame(const QVideoFrame &receivedFrame) {
 }
 
 AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
-  int frameWidth = frame.width(), frameHeight = frame.height();
+  int width = frameMetaData.width, height = frameMetaData.height;
 
   // TODO: Replace hardcoded source format with a dynamic check
   auto sourceFormat = AV_PIX_FMT_BGRA;
   auto destinationFormat = AV_PIX_FMT_YUV420P;
 
-  // TODO: Create a shared context once and reuse it across conversions
-  SwsContext *sws_ctx = sws_getContext(
-      frameWidth, frameHeight, sourceFormat, frameWidth, frameHeight,
-      destinationFormat, SWS_BILINEAR, NULL, NULL, NULL);
-
+  // Create a scaling context if one was not previously created
   if (!sws_ctx) {
-    // TODO: Figure out a more sane way for handling this error
-    qDebug("Could not create scaling context");
-    sws_free_context(&sws_ctx);
-    return nullptr;
+    sws_ctx = sws_getContext(width, height, sourceFormat, width, height,
+                             destinationFormat, SWS_BILINEAR, NULL, NULL, NULL);
+
+    if (!sws_ctx) {
+      // TODO: Figure out a more sane way for handling this error
+      qDebug("Could not create scaling context");
+      sws_free_context(&sws_ctx);
+      return nullptr;
+    }
   }
 
   AVFrame *src_frame = av_frame_alloc();
@@ -68,15 +83,20 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
 
   // TODO: Update this to handle multiple formats with multiple planes
   src_frame->format = sourceFormat;
-  src_frame->width = frameWidth;
-  src_frame->height = frameHeight;
-  src_frame->data[0] = const_cast<uint8_t *>(frame.bits(0));
-  src_frame->linesize[0] = frame.bytesPerLine(0);
+  src_frame->width = width;
+  src_frame->height = height;
+  for (int i = 0; i < frameMetaData.plane_count; i++) {
+    src_frame->data[i] = const_cast<uint8_t *>(frame.bits(i));
+    src_frame->linesize[i] = frame.bytesPerLine(i);
+  }
 
   dst_frame->format = destinationFormat;
-  dst_frame->width = frameWidth;
-  dst_frame->height = frameHeight;
-  av_frame_get_buffer(dst_frame, 0);
+  dst_frame->width = width;
+  dst_frame->height = height;
+  if(av_frame_get_buffer(dst_frame, 0) < 0) {
+    // TODO: Free the allocated things.
+    return nullptr;
+  }
 
   int res = sws_scale_frame(sws_ctx, dst_frame, src_frame);
   if (res < 0) {
@@ -92,4 +112,24 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
   sws_free_context(&sws_ctx);
 
   return dst_frame;
+}
+
+int FrameHandler::encodeVideo(AVFrame *frame) {
+  // create the codedec
+  const AVCodec *codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+  if (!codec)
+    return -1;
+
+  AVCodecContext *ctx = avcodec_alloc_context3(codec);
+  if (!ctx)
+    return -1;
+
+  ctx->bit_rate = 4000000;
+  ctx->width = 1280;
+  ctx->height = 720;
+  ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+
+  avcodec_free_context(&ctx);
+
+  return -1;
 }
