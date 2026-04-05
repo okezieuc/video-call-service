@@ -26,6 +26,9 @@ public:
   FrameHandler() {
 
   };
+  ~FrameHandler();
+  FrameHandler(const FrameHandler&) = delete;
+  FrameHandler& operator=(const FrameHandler&) = delete;
   void enableSingleFrameDevMode();
 
 public slots:

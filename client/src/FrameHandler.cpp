@@ -9,6 +9,12 @@ extern "C" {
 
 #include <QVideoFrame>
 
+FrameHandler::~FrameHandler() {
+  if (sws_ctx) {
+    sws_free_context(&sws_ctx);
+  }
+}
+
 void FrameHandler::enableSingleFrameDevMode() {
   if (singleFrameDevModeFlagStatus < 1)
     singleFrameDevModeFlagStatus = 1;
@@ -22,10 +28,10 @@ void FrameHandler::receiveFrame(const QVideoFrame &receivedFrame) {
   if (!frame.map(QVideoFrame::MapMode::ReadOnly))
     return;
 
-  // TODO: The frame metadata is not guaranteed to remain fixed over the lifetime
-  // of the program. Instead of cacing the metadata permanently, only cache the
-  // sws_ctx which is expensive to recreate and only recreate it whenever the frame
-  // metadata changes.
+  // TODO: The frame metadata is not guaranteed to remain fixed over the
+  // lifetime of the program. Instead of cacing the metadata permanently, only
+  // cache the sws_ctx which is expensive to recreate and only recreate it
+  // whenever the frame metadata changes.
   if (!initializedFrameMetaData) {
     frameMetaData = FrameMetaData{frame.width(), frame.height(),
                                   AV_PIX_FMT_BGRA, frame.planeCount()};
@@ -93,8 +99,9 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
   dst_frame->format = destinationFormat;
   dst_frame->width = width;
   dst_frame->height = height;
-  if(av_frame_get_buffer(dst_frame, 0) < 0) {
-    // TODO: Free the allocated things.
+  if (av_frame_get_buffer(dst_frame, 0) < 0) {
+    av_frame_free(&dst_frame);
+    av_frame_free(&src_frame);
     return nullptr;
   }
 
@@ -103,13 +110,11 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
     qDebug("Conversion failed");
     av_frame_free(&dst_frame);
     av_frame_free(&src_frame);
-    sws_free_context(&sws_ctx);
     return nullptr;
   }
 
   // TODO: Remember to call av_frame_free on dst_frame
   av_frame_free(&src_frame);
-  sws_free_context(&sws_ctx);
 
   return dst_frame;
 }
