@@ -14,6 +14,7 @@ Requirements:
 - CMake 3.21+
 - Qt6 (Widgets)
 - A C++17 compiler
+- Ffmpeg (To install run `brew install ffmpeg`)
 
 Environment setup (recommended):
 ```bash

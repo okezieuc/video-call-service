@@ -6,10 +6,10 @@ setup:
 build:
 	cmake --build build
 
-run:
+run: build
 	./build/client/video_call_client.app/Contents/MacOS/video_call_client
 
-test:
+test: build
 	cd ./build/tests/client && ctest
 
 clean:
