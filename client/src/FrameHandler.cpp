@@ -61,7 +61,7 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
 
   // TODO: Replace hardcoded source format with a dynamic check
   auto sourceFormat = AV_PIX_FMT_BGRA;
-  auto destinationFormat = AV_PIX_FMT_YUV420P;
+  auto destinationFormat = DST_FRAME_FMT;
 
   // Create a scaling context if one was not previously created
   if (!sws_ctx) {
@@ -99,6 +99,7 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
   dst_frame->format = destinationFormat;
   dst_frame->width = width;
   dst_frame->height = height;
+  dst_frame->pts = ++pts_counter;
   if (av_frame_get_buffer(dst_frame, 0) < 0) {
     av_frame_free(&dst_frame);
     av_frame_free(&src_frame);
@@ -113,28 +114,17 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
     return nullptr;
   }
 
+  if (!videoEncoder) {
+    videoEncoder = std::make_unique<VideoEncoder>(frameMetaData);
+  }
+
+  // TODO: Is this the best way to handle the case where the video encoder
+  // is not properly initialized?
+  if (videoEncoder->isInitialized())
+    videoEncoder->encodeFrame(dst_frame);
+
   // TODO: Remember to call av_frame_free on dst_frame
   av_frame_free(&src_frame);
 
   return dst_frame;
-}
-
-int FrameHandler::encodeVideo(AVFrame *frame) {
-  // create the codedec
-  const AVCodec *codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-  if (!codec)
-    return -1;
-
-  AVCodecContext *ctx = avcodec_alloc_context3(codec);
-  if (!ctx)
-    return -1;
-
-  ctx->bit_rate = 4000000;
-  ctx->width = 1280;
-  ctx->height = 720;
-  ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-
-  avcodec_free_context(&ctx);
-
-  return -1;
 }

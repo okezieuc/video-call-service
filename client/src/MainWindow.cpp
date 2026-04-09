@@ -28,7 +28,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
   videoSink = new QVideoSink;
   videoFrameHandler = new FrameHandler;
-  videoFrameHandler->enableSingleFrameDevMode();
+  // videoFrameHandler->enableSingleFrameDevMode();
   connect(videoSink, &QVideoSink::videoFrameChanged, videoFrameHandler,
           &FrameHandler::receiveFrame);
   connect(videoFrameHandler, &FrameHandler::newFrameAvailable, videoPreviewArea,
