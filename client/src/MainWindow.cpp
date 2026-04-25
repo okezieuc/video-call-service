@@ -1,13 +1,17 @@
 #include "MainWindow.h"
 #include "FrameHandler.h"
+#include "Protocol.h"
 #include "SharedTypes.h"
+#include "UdpMediaClient.h"
 #include "VideoPreview.h"
 
 #include <QApplication>
 #include <QCamera>
 #include <QCameraDevice>
 #include <QDebug>
+#include <QHostAddress>
 #include <QImageCapture>
+#include <QLabel>
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QPainter>
@@ -22,8 +26,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   central = new QWidget(this);
   layout = new QVBoxLayout(central);
   joinCallButton = new QPushButton("Join Call", central);
+  statusLabel = new QLabel("Disconnected", central);
   videoPreviewArea = new VideoPreview();
   layout->addWidget(joinCallButton);
+  layout->addWidget(statusLabel);
   layout->addWidget(videoPreviewArea);
   setCentralWidget(central);
   setWindowTitle("Video Call Client");
@@ -105,35 +111,131 @@ void MainWindow::onJoinCallClicked() {
   }
 
   joinCallButton->setText("Connecting...");
-  controlSocket->connectToHost("localhost", 5555);
+  updateConnectionStatus("Connecting");
+  controlSocket->connectToHost("127.0.0.1", 5555);
 }
 
 void MainWindow::onConnected() {
-  qDebug() << "Connected to server; sending ping";
+  qDebug() << "Connected to server; joining call";
 
-  QByteArray message;
-  message.append(static_cast<char>(ControlMessage::Ping));
-  controlSocket->write(message);
-  controlSocket->flush();
+  sendControlMessage(ControlMessage::Ping);
+  sendControlMessage(ControlMessage::JoinCall);
 
-  joinCallButton->setText("Waiting for Pong...");
+  joinCallButton->setText("Joining...");
+  updateConnectionStatus("Joining call");
 }
 
 void MainWindow::onDisconnected() {
   qDebug() << "Disconnected from server";
+  clientId = 0;
+  controlBuffer.clear();
+  remotePacketCount = 0;
+  if (udpMediaClient) {
+    udpMediaClient->setMediaEnabled(false);
+  }
   joinCallButton->setText("Join Call");
+  updateConnectionStatus("Disconnected");
 }
 
 void MainWindow::onReadyRead() {
-  const QByteArray data = controlSocket->readAll();
+  controlBuffer.append(controlSocket->readAll());
 
-  for (const char byte : data) {
-    const auto type = static_cast<std::uint8_t>(byte);
-    if (type == ControlMessage::Pong) {
-      qDebug() << "Received pong from server";
-      joinCallButton->setText("Connected");
-    } else {
-      qDebug() << "Unknown control message type:" << type;
+  while (true) {
+    Protocol::TcpMessage message;
+    const auto result = Protocol::takeTcpMessage(controlBuffer, message);
+    if (result == Protocol::DecodeResult::Incomplete) {
+      return;
     }
+
+    if (result == Protocol::DecodeResult::Invalid) {
+      qDebug() << "Invalid control frame from server";
+      controlSocket->disconnectFromHost();
+      return;
+    }
+
+    handleControlMessage(message);
+  }
+}
+
+void MainWindow::onRemotePacketReceived(std::uint32_t senderClientId,
+                                        std::uint32_t sequenceNumber,
+                                        qsizetype payloadSize) {
+  ++remotePacketCount;
+  updateConnectionStatus(QString("UDP registered - received %1 packets")
+                             .arg(remotePacketCount));
+  qDebug() << "Verified forwarded packet from client" << senderClientId
+           << "sequence" << sequenceNumber << "payload" << payloadSize;
+}
+
+void MainWindow::sendControlMessage(std::uint8_t type,
+                                    const QByteArray &payload) {
+  if (!controlSocket ||
+      controlSocket->state() != QAbstractSocket::ConnectedState) {
+    return;
+  }
+
+  controlSocket->write(Protocol::encodeTcpMessage(type, payload));
+  controlSocket->flush();
+}
+
+void MainWindow::handleControlMessage(const Protocol::TcpMessage &message) {
+  switch (message.type) {
+  case ControlMessage::Pong:
+    qDebug() << "Received pong from server";
+    break;
+  case ControlMessage::JoinAccepted:
+    handleJoinAccepted(message.payload);
+    break;
+  case ControlMessage::UdpRegistered:
+    qDebug() << "UDP media endpoint registered";
+    if (udpMediaClient) {
+      udpMediaClient->setMediaEnabled(true);
+    }
+    joinCallButton->setText("Connected");
+    updateConnectionStatus("UDP registered - received 0 packets");
+    break;
+  default:
+    qDebug() << "Unknown control message type:" << message.type;
+    break;
+  }
+}
+
+void MainWindow::handleJoinAccepted(const QByteArray &payload) {
+  Protocol::JoinAcceptedPayload accepted;
+  if (!Protocol::decodeJoinAcceptedPayload(payload, accepted)) {
+    qDebug() << "Invalid JoinAccepted payload";
+    controlSocket->disconnectFromHost();
+    return;
+  }
+
+  clientId = accepted.clientId;
+  qDebug() << "Joined call as client" << clientId << "UDP port"
+           << accepted.udpPort;
+
+  if (!udpMediaClient) {
+    udpMediaClient = new UdpMediaClient(this);
+    connect(udpMediaClient, &UdpMediaClient::remotePacketReceived, this,
+            &MainWindow::onRemotePacketReceived);
+    connect(udpMediaClient, &UdpMediaClient::packetDropped, this,
+            [](const QString &reason) {
+              qDebug() << "UDP media packet dropped:" << reason;
+            });
+    connect(videoFrameHandler, &FrameHandler::encodedPacketAvailable,
+            udpMediaClient, &UdpMediaClient::sendVideoPacket,
+            Qt::UniqueConnection);
+  }
+
+  udpMediaClient->setMediaEnabled(false);
+  udpMediaClient->configure(QHostAddress::LocalHost, accepted.udpPort,
+                            clientId);
+  udpMediaClient->sendRegisterEndpoint();
+
+  joinCallButton->setText("Registering UDP...");
+  updateConnectionStatus(QString("TCP joined as client %1").arg(clientId));
+}
+
+void MainWindow::updateConnectionStatus(const QString &status) {
+  if (statusLabel) {
+    statusLabel->setText(status);
   }
 }

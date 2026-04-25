@@ -2,6 +2,8 @@
 
 #include "utils.h"
 #include "FrameHandler.h"
+#include "Protocol.h"
+#include "UdpMediaClient.h"
 #include "VideoPreview.h"
 
 #include <QMainWindow>
@@ -13,6 +15,7 @@ class MockMainWindow;
 
 class QCamera;
 class QCameraPermission;
+class QLabel;
 class QPushButton;
 class QTcpSocket;
 class QVBoxLayout;
@@ -45,12 +48,22 @@ private slots:
   void onConnected();
   void onDisconnected();
   void onReadyRead();
+  void onRemotePacketReceived(std::uint32_t senderClientId,
+                              std::uint32_t sequenceNumber,
+                              qsizetype payloadSize);
 
 private:
+  void sendControlMessage(std::uint8_t type,
+                          const QByteArray &payload = QByteArray());
+  void handleControlMessage(const Protocol::TcpMessage &message);
+  void handleJoinAccepted(const QByteArray &payload);
+  void updateConnectionStatus(const QString &status);
+
   // Layout
   QWidget *central = nullptr;
   QVBoxLayout *layout = nullptr;
   QPushButton *joinCallButton = nullptr;
+  QLabel *statusLabel = nullptr;
 
   // Camera-related
   QCamera *camera = nullptr;
@@ -65,4 +78,8 @@ private:
 
   // Control channel
   QTcpSocket *controlSocket = nullptr;
+  QByteArray controlBuffer;
+  UdpMediaClient *udpMediaClient = nullptr;
+  std::uint32_t clientId = 0;
+  std::uint64_t remotePacketCount = 0;
 };

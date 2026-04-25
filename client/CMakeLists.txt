@@ -11,6 +11,7 @@ set(CMAKE_AUTORCC ON)
 add_library(video_call_client_lib STATIC
     src/FrameHandler.cpp
     src/MainWindow.cpp
+    src/UdpMediaClient.cpp
     src/VideoEncoder.cpp
     src/VideoPreview.cpp
 )
