@@ -14,6 +14,7 @@ class MockMainWindow;
 class QCamera;
 class QCameraPermission;
 class QPushButton;
+class QTcpSocket;
 class QVBoxLayout;
 class QWidget;
 class VideoSink;
@@ -25,6 +26,8 @@ struct CameraStatus {
 };
 
 class MainWindow : public QMainWindow {
+  Q_OBJECT
+
   friend class MockMainWindow;
 
 public:
@@ -36,6 +39,12 @@ protected:
   virtual void requestCameraPermission();
   virtual void startCamera();
   virtual int videoInputCount() const;
+
+private slots:
+  void onJoinCallClicked();
+  void onConnected();
+  void onDisconnected();
+  void onReadyRead();
 
 private:
   // Layout
@@ -53,4 +62,7 @@ private:
 
   FrameHandler *videoFrameHandler;
   VideoPreview *videoPreviewArea;
+
+  // Control channel
+  QTcpSocket *controlSocket = nullptr;
 };

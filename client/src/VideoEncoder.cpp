@@ -65,6 +65,9 @@ int VideoEncoder::encodeFrame(AVFrame *frame) {
 
     if (ret < 0)
       return ret;
+  }
 
   return 0;
 }
+
+bool VideoEncoder::isInitialized() { return initialized; }

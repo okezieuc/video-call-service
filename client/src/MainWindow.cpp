@@ -1,16 +1,19 @@
 #include "MainWindow.h"
 #include "FrameHandler.h"
+#include "SharedTypes.h"
 #include "VideoPreview.h"
 
 #include <QApplication>
 #include <QCamera>
 #include <QCameraDevice>
+#include <QDebug>
 #include <QImageCapture>
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QPainter>
 #include <QPermissions>
 #include <QPushButton>
+#include <QTcpSocket>
 #include <QVBoxLayout>
 #include <QVideoSink>
 #include <QWidget>
@@ -38,7 +41,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   captureSession.setCamera(camera);
   captureSession.setVideoOutput(videoSink);
 
-  connect(joinCallButton, &QPushButton::clicked, this, []() {});
+  connect(joinCallButton, &QPushButton::clicked, this,
+          &MainWindow::onJoinCallClicked);
 }
 
 void MainWindow::updateCameraStatus() {
@@ -82,4 +86,54 @@ void MainWindow::startCamera() { camera->start(); }
 
 int MainWindow::videoInputCount() const {
   return QMediaDevices::videoInputs().count();
+}
+
+void MainWindow::onJoinCallClicked() {
+  if (!controlSocket) {
+    controlSocket = new QTcpSocket(this);
+    connect(controlSocket, &QTcpSocket::connected, this,
+            &MainWindow::onConnected);
+    connect(controlSocket, &QTcpSocket::disconnected, this,
+            &MainWindow::onDisconnected);
+    connect(controlSocket, &QTcpSocket::readyRead, this,
+            &MainWindow::onReadyRead);
+  }
+
+  if (controlSocket->state() == QAbstractSocket::ConnectedState) {
+    onConnected();
+    return;
+  }
+
+  joinCallButton->setText("Connecting...");
+  controlSocket->connectToHost("localhost", 5555);
+}
+
+void MainWindow::onConnected() {
+  qDebug() << "Connected to server; sending ping";
+
+  QByteArray message;
+  message.append(static_cast<char>(ControlMessage::Ping));
+  controlSocket->write(message);
+  controlSocket->flush();
+
+  joinCallButton->setText("Waiting for Pong...");
+}
+
+void MainWindow::onDisconnected() {
+  qDebug() << "Disconnected from server";
+  joinCallButton->setText("Join Call");
+}
+
+void MainWindow::onReadyRead() {
+  const QByteArray data = controlSocket->readAll();
+
+  for (const char byte : data) {
+    const auto type = static_cast<std::uint8_t>(byte);
+    if (type == ControlMessage::Pong) {
+      qDebug() << "Received pong from server";
+      joinCallButton->setText("Connected");
+    } else {
+      qDebug() << "Unknown control message type:" << type;
+    }
+  }
 }
