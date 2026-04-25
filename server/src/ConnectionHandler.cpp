@@ -1,5 +1,6 @@
 #include "ConnectionHandler.h"
 
+#include "Protocol.h"
 #include "SharedTypes.h"
 
 #include <QDebug>
@@ -14,26 +15,60 @@ ConnectionHandler::ConnectionHandler(qintptr socketDescriptor, QObject *parent)
 
   connect(this, &QTcpSocket::readyRead, this,
           &ConnectionHandler::handleReadyRead);
-  connect(this, &QTcpSocket::disconnected, this,
-          &ConnectionHandler::disconnected);
+  connect(this, &QTcpSocket::disconnected, this, [this]() {
+    emit clientDisconnected(this);
+  });
 
   qDebug() << "Client connected from" << peerAddress() << ":" << peerPort();
+}
+
+std::uint32_t ConnectionHandler::clientId() const { return m_clientId; }
+
+void ConnectionHandler::setClientId(std::uint32_t clientId) {
+  m_clientId = clientId;
+}
+
+void ConnectionHandler::sendJoinAccepted(std::uint16_t udpPort) {
+  Protocol::JoinAcceptedPayload payload{m_clientId, udpPort};
+  sendMessage(ControlMessage::JoinAccepted,
+              Protocol::encodeJoinAcceptedPayload(payload));
+  qDebug() << "Accepted client" << m_clientId << "with UDP port" << udpPort;
+}
+
+void ConnectionHandler::sendUdpRegistered() {
+  sendMessage(ControlMessage::UdpRegistered);
+  qDebug() << "Confirmed UDP registration for client" << m_clientId;
 }
 
 void ConnectionHandler::handleReadyRead() {
   m_receivedData.append(readAll());
 
-  while (!m_receivedData.isEmpty()) {
-    const auto type = static_cast<std::uint8_t>(m_receivedData.at(0));
-    m_receivedData.remove(0, 1);
+  while (true) {
+    Protocol::TcpMessage message;
+    const auto result = Protocol::takeTcpMessage(m_receivedData, message);
+    if (result == Protocol::DecodeResult::Incomplete) {
+      return;
+    }
 
-    switch (type) {
+    if (result == Protocol::DecodeResult::Invalid) {
+      qDebug() << "Invalid TCP control frame from" << peerAddress() << ":"
+               << peerPort();
+      disconnectFromHost();
+      return;
+    }
+
+    switch (message.type) {
     case ControlMessage::Ping:
       sendPong();
       break;
+    case ControlMessage::JoinCall:
+      emit joinRequested(this);
+      break;
     case ControlMessage::EndCall:
+    case ControlMessage::LeaveCall:
       qDebug() << "Received end call from" << peerAddress() << ":"
                << peerPort();
+      disconnectFromHost();
       break;
     case ControlMessage::CameraOff:
       qDebug() << "Received camera off from" << peerAddress() << ":"
@@ -48,7 +83,7 @@ void ConnectionHandler::handleReadyRead() {
                << peerPort();
       break;
     default:
-      qDebug() << "Unknown control message type:" << type;
+      qDebug() << "Unknown control message type:" << message.type;
       break;
     }
   }
@@ -61,9 +96,6 @@ void ConnectionHandler::sendPong() {
 
 void ConnectionHandler::sendMessage(std::uint8_t type,
                                     const QByteArray &payload) {
-  QByteArray message;
-  message.append(static_cast<char>(type));
-  message.append(payload);
-  write(message);
+  write(Protocol::encodeTcpMessage(type, payload));
   flush();
 }
