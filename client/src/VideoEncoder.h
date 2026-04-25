@@ -4,6 +4,9 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
+#include <QByteArray>
+#include <QVector>
+
 struct FrameMetaData {
   int width;
   int height;
@@ -18,13 +21,13 @@ public:
   ~VideoEncoder();
   VideoEncoder(const VideoEncoder &) = delete;
   VideoEncoder &operator=(const VideoEncoder &) = delete;
-  int encodeFrame(AVFrame *frame);
+  QVector<QByteArray> encodeFrame(AVFrame *frame);
   bool isInitialized();
 
 private:
-  const AVCodec *codec;
-  AVCodecContext *ctx;
-  AVPacket *pkt;
+  const AVCodec *codec = nullptr;
+  AVCodecContext *ctx = nullptr;
+  AVPacket *pkt = nullptr;
 
   // Some things in the constructor can error. If a part of the construction of
   // this object fails and the object is left indeterminate state, the value of

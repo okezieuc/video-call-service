@@ -120,8 +120,12 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
 
   // TODO: Is this the best way to handle the case where the video encoder
   // is not properly initialized?
-  if (videoEncoder->isInitialized())
-    videoEncoder->encodeFrame(dst_frame);
+  if (videoEncoder->isInitialized()) {
+    const auto packets = videoEncoder->encodeFrame(dst_frame);
+    for (const auto &packet : packets) {
+      emit encodedPacketAvailable(packet);
+    }
+  }
 
   // TODO: Remember to call av_frame_free on dst_frame
   av_frame_free(&src_frame);
