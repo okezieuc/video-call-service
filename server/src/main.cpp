@@ -9,6 +9,11 @@ int main(int argc, char *argv[]) {
 
   constexpr quint16 port = 5555;
   TcpServer server(port);
+  if (!server.isUdpRelayRunning()) {
+    qCritical() << "Failed to start UDP relay";
+    return 1;
+  }
+
   if (!server.listen(QHostAddress::Any, port)) {
     qCritical() << "Failed to start server on port" << port << ":"
                 << server.errorString();
