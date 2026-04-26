@@ -16,6 +16,7 @@ void UdpMediaClient::configure(const QHostAddress &serverAddress,
   m_serverPort = serverPort;
   m_clientId = clientId;
   m_configured = serverPort != 0 && clientId != 0;
+  m_reassembler.clear();
 
   if (m_configured && m_socket->state() != QAbstractSocket::BoundState) {
     if (!m_socket->bind(QHostAddress::AnyIPv4, 0)) {
@@ -94,6 +95,19 @@ void UdpMediaClient::handleReadyRead() {
     emit remotePacketReceived(packet.header.clientId,
                               packet.header.sequenceNumber,
                               packet.payload.size());
+
+    const auto reassemblyResult = m_reassembler.accept(packet);
+    switch (reassemblyResult.status) {
+    case UdpFragmentReassembler::Status::Complete:
+      emit remoteVideoPacketReceived(packet.header.clientId,
+                                     reassemblyResult.payload);
+      break;
+    case UdpFragmentReassembler::Status::Dropped:
+      emit packetDropped(reassemblyResult.dropReason);
+      break;
+    case UdpFragmentReassembler::Status::Incomplete:
+      break;
+    }
   }
 }
 

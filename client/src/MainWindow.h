@@ -4,8 +4,10 @@
 #include "FrameHandler.h"
 #include "Protocol.h"
 #include "UdpMediaClient.h"
+#include "VideoDecoder.h"
 #include "VideoPreview.h"
 
+#include <QHash>
 #include <QMainWindow>
 #include <QMediaCaptureSession>
 #include <QPermissions>
@@ -51,6 +53,8 @@ private slots:
   void onRemotePacketReceived(std::uint32_t senderClientId,
                               std::uint32_t sequenceNumber,
                               qsizetype payloadSize);
+  void onRemoteVideoPacketReceived(std::uint32_t senderClientId,
+                                   const QByteArray &encodedPacket);
 
 private:
   void sendControlMessage(std::uint8_t type,
@@ -58,12 +62,16 @@ private:
   void handleControlMessage(const Protocol::TcpMessage &message);
   void handleJoinAccepted(const QByteArray &payload);
   void updateConnectionStatus(const QString &status);
+  VideoDecoder *ensureRemoteDecoder(std::uint32_t senderClientId);
+  void clearRemoteParticipants();
 
   // Layout
   QWidget *central = nullptr;
   QVBoxLayout *layout = nullptr;
   QPushButton *joinCallButton = nullptr;
   QLabel *statusLabel = nullptr;
+  QLabel *remoteFeedsLabel = nullptr;
+  QVBoxLayout *remoteFeedsLayout = nullptr;
 
   // Camera-related
   QCamera *camera = nullptr;
@@ -82,4 +90,7 @@ private:
   UdpMediaClient *udpMediaClient = nullptr;
   std::uint32_t clientId = 0;
   std::uint64_t remotePacketCount = 0;
+  std::uint64_t remoteVideoPacketCount = 0;
+  QHash<std::uint32_t, QWidget *> remoteFeedContainers;
+  QHash<std::uint32_t, VideoDecoder *> remoteDecoders;
 };

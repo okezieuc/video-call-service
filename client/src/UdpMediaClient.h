@@ -1,5 +1,7 @@
 #pragma once
 
+#include "UdpFragmentReassembler.h"
+
 #include <cstdint>
 
 #include <QByteArray>
@@ -27,6 +29,8 @@ signals:
   void remotePacketReceived(std::uint32_t senderClientId,
                             std::uint32_t sequenceNumber,
                             qsizetype payloadSize);
+  void remoteVideoPacketReceived(std::uint32_t senderClientId,
+                                 const QByteArray &encodedPacket);
   void packetDropped(const QString &reason);
 
 private slots:
@@ -45,6 +49,7 @@ private:
   std::uint32_t m_nextSequenceNumber = 1;
   std::uint32_t m_nextFrameId = 1;
   std::uint64_t m_receivedPacketCount = 0;
+  UdpFragmentReassembler m_reassembler;
   bool m_configured = false;
   bool m_mediaEnabled = false;
 };

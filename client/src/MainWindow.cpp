@@ -28,12 +28,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   joinCallButton = new QPushButton("Join Call", central);
   statusLabel = new QLabel("Disconnected", central);
   videoPreviewArea = new VideoPreview();
+  remoteFeedsLabel = new QLabel("Remote participants", central);
+  remoteFeedsLayout = new QVBoxLayout();
   layout->addWidget(joinCallButton);
   layout->addWidget(statusLabel);
+  layout->addWidget(new QLabel("Local preview", central));
   layout->addWidget(videoPreviewArea);
+  layout->addWidget(remoteFeedsLabel);
+  layout->addLayout(remoteFeedsLayout);
   setCentralWidget(central);
   setWindowTitle("Video Call Client");
-  resize(480, 320);
+  resize(640, 520);
 
   videoSink = new QVideoSink;
   videoFrameHandler = new FrameHandler;
@@ -130,6 +135,8 @@ void MainWindow::onDisconnected() {
   clientId = 0;
   controlBuffer.clear();
   remotePacketCount = 0;
+  remoteVideoPacketCount = 0;
+  clearRemoteParticipants();
   if (udpMediaClient) {
     udpMediaClient->setMediaEnabled(false);
   }
@@ -161,10 +168,26 @@ void MainWindow::onRemotePacketReceived(std::uint32_t senderClientId,
                                         std::uint32_t sequenceNumber,
                                         qsizetype payloadSize) {
   ++remotePacketCount;
-  updateConnectionStatus(QString("UDP registered - received %1 packets")
-                             .arg(remotePacketCount));
+  updateConnectionStatus(
+      QString("UDP registered - received %1 fragments, %2 video packets")
+          .arg(remotePacketCount)
+          .arg(remoteVideoPacketCount));
   qDebug() << "Verified forwarded packet from client" << senderClientId
            << "sequence" << sequenceNumber << "payload" << payloadSize;
+}
+
+void MainWindow::onRemoteVideoPacketReceived(std::uint32_t senderClientId,
+                                             const QByteArray &encodedPacket) {
+  ++remoteVideoPacketCount;
+  updateConnectionStatus(
+      QString("UDP registered - received %1 fragments, %2 video packets")
+          .arg(remotePacketCount)
+          .arg(remoteVideoPacketCount));
+
+  auto *decoder = ensureRemoteDecoder(senderClientId);
+  if (decoder) {
+    decoder->decodePacket(encodedPacket);
+  }
 }
 
 void MainWindow::sendControlMessage(std::uint8_t type,
@@ -216,6 +239,8 @@ void MainWindow::handleJoinAccepted(const QByteArray &payload) {
     udpMediaClient = new UdpMediaClient(this);
     connect(udpMediaClient, &UdpMediaClient::remotePacketReceived, this,
             &MainWindow::onRemotePacketReceived);
+    connect(udpMediaClient, &UdpMediaClient::remoteVideoPacketReceived, this,
+            &MainWindow::onRemoteVideoPacketReceived);
     connect(udpMediaClient, &UdpMediaClient::packetDropped, this,
             [](const QString &reason) {
               qDebug() << "UDP media packet dropped:" << reason;
@@ -238,4 +263,52 @@ void MainWindow::updateConnectionStatus(const QString &status) {
   if (statusLabel) {
     statusLabel->setText(status);
   }
+}
+
+VideoDecoder *MainWindow::ensureRemoteDecoder(std::uint32_t senderClientId) {
+  if (remoteDecoders.contains(senderClientId)) {
+    return remoteDecoders.value(senderClientId);
+  }
+
+  auto *container = new QWidget(central);
+  auto *containerLayout = new QVBoxLayout(container);
+  auto *label = new QLabel(QString("Client %1").arg(senderClientId), container);
+  auto *preview = new VideoPreview(container);
+  preview->setMinimumSize(240, 180);
+  containerLayout->addWidget(label);
+  containerLayout->addWidget(preview);
+  remoteFeedsLayout->addWidget(container);
+
+  auto *decoder = new VideoDecoder(this);
+  if (!decoder->isInitialized()) {
+    qDebug() << "Failed to initialize H.264 decoder for remote client"
+             << senderClientId;
+    delete decoder;
+    delete container;
+    return nullptr;
+  }
+
+  connect(decoder, &VideoDecoder::frameDecoded, preview,
+          &VideoPreview::updateNextFrame);
+  connect(decoder, &VideoDecoder::decodeError, this,
+          [senderClientId](const QString &reason) {
+            qDebug() << "Remote video decode error for client" << senderClientId
+                     << ":" << reason;
+          });
+
+  remoteFeedContainers.insert(senderClientId, container);
+  remoteDecoders.insert(senderClientId, decoder);
+  return decoder;
+}
+
+void MainWindow::clearRemoteParticipants() {
+  for (auto *decoder : remoteDecoders) {
+    delete decoder;
+  }
+  remoteDecoders.clear();
+
+  for (auto *container : remoteFeedContainers) {
+    delete container;
+  }
+  remoteFeedContainers.clear();
 }
