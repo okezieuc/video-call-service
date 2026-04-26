@@ -12,6 +12,7 @@
 #include <QHostAddress>
 #include <QImageCapture>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
 #include <QPainter>
@@ -25,11 +26,15 @@
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   central = new QWidget(this);
   layout = new QVBoxLayout(central);
+  serverAddressInput = new QLineEdit("127.0.0.1", central);
+  serverAddressInput->setPlaceholderText("Server IP or host:port");
   joinCallButton = new QPushButton("Join Call", central);
   statusLabel = new QLabel("Disconnected", central);
   videoPreviewArea = new VideoPreview();
   remoteFeedsLabel = new QLabel("Remote participants", central);
   remoteFeedsLayout = new QVBoxLayout();
+  layout->addWidget(new QLabel("Server address", central));
+  layout->addWidget(serverAddressInput);
   layout->addWidget(joinCallButton);
   layout->addWidget(statusLabel);
   layout->addWidget(new QLabel("Local preview", central));
@@ -99,6 +104,41 @@ int MainWindow::videoInputCount() const {
   return QMediaDevices::videoInputs().count();
 }
 
+MainWindow::ServerEndpoint
+MainWindow::parseServerEndpoint(const QString &input, bool *ok) {
+  constexpr quint16 defaultPort = 5555;
+  auto endpoint = ServerEndpoint{QStringLiteral("127.0.0.1"), defaultPort};
+  bool isValid = true;
+
+  const QString trimmed = input.trimmed();
+  if (!trimmed.isEmpty()) {
+    const int portSeparatorIndex = trimmed.lastIndexOf(':');
+    const bool hasPort = portSeparatorIndex > 0 &&
+                         portSeparatorIndex < trimmed.size() - 1 &&
+                         !trimmed.startsWith('[');
+
+    if (hasPort) {
+      bool portOk = false;
+      const uint parsedPort =
+          trimmed.mid(portSeparatorIndex + 1).toUInt(&portOk);
+      endpoint.host = trimmed.left(portSeparatorIndex).trimmed();
+      if (!portOk || parsedPort == 0 || parsedPort > 65535 ||
+          endpoint.host.isEmpty()) {
+        isValid = false;
+      } else {
+        endpoint.port = static_cast<quint16>(parsedPort);
+      }
+    } else {
+      endpoint.host = trimmed;
+    }
+  }
+
+  if (ok) {
+    *ok = isValid;
+  }
+  return endpoint;
+}
+
 void MainWindow::onJoinCallClicked() {
   if (!controlSocket) {
     controlSocket = new QTcpSocket(this);
@@ -115,9 +155,20 @@ void MainWindow::onJoinCallClicked() {
     return;
   }
 
+  bool endpointOk = false;
+  const auto endpoint =
+      parseServerEndpoint(serverAddressInput ? serverAddressInput->text()
+                                             : QString(),
+                          &endpointOk);
+  if (!endpointOk) {
+    updateConnectionStatus("Invalid server address");
+    return;
+  }
+
   joinCallButton->setText("Connecting...");
-  updateConnectionStatus("Connecting");
-  controlSocket->connectToHost("127.0.0.1", 5555);
+  updateConnectionStatus(
+      QString("Connecting to %1:%2").arg(endpoint.host).arg(endpoint.port));
+  controlSocket->connectToHost(endpoint.host, endpoint.port);
 }
 
 void MainWindow::onConnected() {
@@ -251,8 +302,12 @@ void MainWindow::handleJoinAccepted(const QByteArray &payload) {
   }
 
   udpMediaClient->setMediaEnabled(false);
-  udpMediaClient->configure(QHostAddress::LocalHost, accepted.udpPort,
-                            clientId);
+  QHostAddress udpServerAddress = controlSocket->peerAddress();
+  if (udpServerAddress.isNull()) {
+    udpServerAddress = QHostAddress::LocalHost;
+  }
+
+  udpMediaClient->configure(udpServerAddress, accepted.udpPort, clientId);
   udpMediaClient->sendRegisterEndpoint();
 
   joinCallButton->setText("Registering UDP...");

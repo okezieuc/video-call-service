@@ -18,6 +18,7 @@ class MockMainWindow;
 class QCamera;
 class QCameraPermission;
 class QLabel;
+class QLineEdit;
 class QPushButton;
 class QTcpSocket;
 class QVBoxLayout;
@@ -57,6 +58,14 @@ private slots:
                                    const QByteArray &encodedPacket);
 
 private:
+  struct ServerEndpoint {
+    QString host;
+    quint16 port = 5555;
+  };
+
+  static ServerEndpoint parseServerEndpoint(const QString &input,
+                                            bool *ok = nullptr);
+
   void sendControlMessage(std::uint8_t type,
                           const QByteArray &payload = QByteArray());
   void handleControlMessage(const Protocol::TcpMessage &message);
@@ -68,6 +77,7 @@ private:
   // Layout
   QWidget *central = nullptr;
   QVBoxLayout *layout = nullptr;
+  QLineEdit *serverAddressInput = nullptr;
   QPushButton *joinCallButton = nullptr;
   QLabel *statusLabel = nullptr;
   QLabel *remoteFeedsLabel = nullptr;
