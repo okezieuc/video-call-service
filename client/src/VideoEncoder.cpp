@@ -46,16 +46,17 @@ VideoEncoder::~VideoEncoder() {
   if (ctx)
     avcodec_free_context(&ctx);
   if (pkt)
-    av_packet_unref(pkt);
+    av_packet_free(&pkt);
 }
 
-int VideoEncoder::encodeFrame(AVFrame *frame) {
+QVector<QByteArray> VideoEncoder::encodeFrame(AVFrame *frame) {
+  QVector<QByteArray> encodedPackets;
   if (!initialized)
-    return -1;
+    return encodedPackets;
 
   int ret = avcodec_send_frame(ctx, frame);
   if (ret < 0) {
-    return ret;
+    return encodedPackets;
   }
 
   while (true) {
@@ -64,7 +65,14 @@ int VideoEncoder::encodeFrame(AVFrame *frame) {
       break;
 
     if (ret < 0)
-      return ret;
+      return encodedPackets;
 
-  return 0;
+    encodedPackets.append(
+        QByteArray(reinterpret_cast<const char *>(pkt->data), pkt->size));
+    av_packet_unref(pkt);
+  }
+
+  return encodedPackets;
 }
+
+bool VideoEncoder::isInitialized() { return initialized; }

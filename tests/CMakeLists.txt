@@ -7,3 +7,4 @@ FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 add_subdirectory(client)
+add_subdirectory(server)

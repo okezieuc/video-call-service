@@ -15,4 +15,5 @@ if(DEFINED ENV{QT_ROOT} AND NOT "$ENV{QT_ROOT}" STREQUAL "")
 endif()
 
 add_subdirectory(client)
+add_subdirectory(server)
 add_subdirectory(tests)

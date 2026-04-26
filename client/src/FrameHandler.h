@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VideoEncoder.h"
+#include <QByteArray>
 #include <QObject>
 #include <QVideoFrame>
 
@@ -34,6 +35,7 @@ public slots:
 
 signals:
   void newFrameAvailable(const QVideoFrame &frame);
+  void encodedPacketAvailable(const QByteArray &packet);
 
 private:
   SwsContext *sws_ctx = nullptr;
