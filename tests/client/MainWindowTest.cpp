@@ -10,6 +10,9 @@ public:
   bool isCameraStarted = false;
 
   auto getCameraStatus() { return cameraStatus; }
+  auto parseEndpoint(const QString &input, bool *ok = nullptr) {
+    return parseServerEndpoint(input, ok);
+  }
 
 protected:
   Qt::PermissionStatus checkCameraPermissionStatus() const override {
@@ -67,4 +70,26 @@ TEST_F(MainWindowTest,
   window.fakeCameraPermissionStatus = Qt::PermissionStatus::Granted;
   window.updateCameraStatus();
   EXPECT_FALSE(window.requestCameraPermissionCalled);
+}
+
+TEST_F(MainWindowTest, ParseEndpoint_WithHostOnly_UsesDefaultPort) {
+  bool ok = false;
+  const auto endpoint = window.parseEndpoint("192.168.1.23", &ok);
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(endpoint.host, "192.168.1.23");
+  EXPECT_EQ(endpoint.port, 5555);
+}
+
+TEST_F(MainWindowTest, ParseEndpoint_WithHostAndPort_UsesCustomPort) {
+  bool ok = false;
+  const auto endpoint = window.parseEndpoint("192.168.1.23:6000", &ok);
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(endpoint.host, "192.168.1.23");
+  EXPECT_EQ(endpoint.port, 6000);
+}
+
+TEST_F(MainWindowTest, ParseEndpoint_WithInvalidPort_ReturnsInvalid) {
+  bool ok = true;
+  window.parseEndpoint("192.168.1.23:70000", &ok);
+  EXPECT_FALSE(ok);
 }

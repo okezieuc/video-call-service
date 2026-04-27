@@ -2,6 +2,7 @@
 
 #include "VideoEncoder.h"
 #include <QByteArray>
+#include <QImage>
 #include <QObject>
 #include <QVideoFrame>
 
@@ -59,5 +60,5 @@ private:
   /* Converts the pixel data into a format from which the video
    * data will be encoded.
    */
-  AVFrame *convertPixelFormat(const QVideoFrame &frame);
+  AVFrame *convertPixelFormat(const QImage &image);
 };

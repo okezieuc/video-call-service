@@ -7,6 +7,7 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+#include <QImage>
 #include <QVideoFrame>
 
 FrameHandler::~FrameHandler() {
@@ -24,56 +25,60 @@ void FrameHandler::receiveFrame(const QVideoFrame &receivedFrame) {
   if (singleFrameDevModeFlagStatus && singleFrameDevModeFlagStatus++ > 1)
     return;
 
-  QVideoFrame frame(receivedFrame);
-  if (!frame.map(QVideoFrame::MapMode::ReadOnly))
+  if (!receivedFrame.isValid()) {
     return;
-
-  // TODO: The frame metadata is not guaranteed to remain fixed over the
-  // lifetime of the program. Instead of cacing the metadata permanently, only
-  // cache the sws_ctx which is expensive to recreate and only recreate it
-  // whenever the frame metadata changes.
-  if (!initializedFrameMetaData) {
-    frameMetaData = FrameMetaData{frame.width(), frame.height(),
-                                  AV_PIX_FMT_BGRA, frame.planeCount()};
-
-    for (int i = 0; i < frame.planeCount(); i++) {
-      frameMetaData.linesize[i] = frame.bytesPerLine(i);
-    }
-
-    initializedFrameMetaData = true;
   }
 
-  auto converted_frame = convertPixelFormat(frame);
-  frame.unmap();
+  QImage image = receivedFrame.toImage();
+  if (image.isNull()) {
+    return;
+  }
 
-  // TODO: What else do we need to do when handling this
+  image = image.convertToFormat(QImage::Format_RGBA8888);
+
+  const int evenWidth = image.width() & ~1;
+  const int evenHeight = image.height() & ~1;
+  if (evenWidth <= 0 || evenHeight <= 0) {
+    return;
+  }
+
+  if (evenWidth != image.width() || evenHeight != image.height()) {
+    image = image.copy(0, 0, evenWidth, evenHeight);
+  }
+
+  auto converted_frame = convertPixelFormat(image);
+
   if (converted_frame == nullptr)
     return;
 
   av_frame_free(&converted_frame);
-  emit newFrameAvailable(frame);
+  emit newFrameAvailable(QVideoFrame(image));
 
   return;
 }
 
-AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
-  int width = frameMetaData.width, height = frameMetaData.height;
-
-  // TODO: Replace hardcoded source format with a dynamic check
-  auto sourceFormat = AV_PIX_FMT_BGRA;
+AVFrame *FrameHandler::convertPixelFormat(const QImage &image) {
+  const int width = image.width();
+  const int height = image.height();
+  auto sourceFormat = AV_PIX_FMT_RGBA;
   auto destinationFormat = DST_FRAME_FMT;
 
-  // Create a scaling context if one was not previously created
-  if (!sws_ctx) {
-    sws_ctx = sws_getContext(width, height, sourceFormat, width, height,
-                             destinationFormat, SWS_BILINEAR, NULL, NULL, NULL);
+  const bool metadataChanged =
+      !initializedFrameMetaData || frameMetaData.width != width ||
+      frameMetaData.height != height || frameMetaData.src_fmt != sourceFormat;
+  if (metadataChanged) {
+    frameMetaData = FrameMetaData{width, height, sourceFormat, 1, {0}};
+    frameMetaData.linesize[0] = image.bytesPerLine();
+    initializedFrameMetaData = true;
+    videoEncoder.reset();
+  }
 
-    if (!sws_ctx) {
-      // TODO: Figure out a more sane way for handling this error
-      qDebug("Could not create scaling context");
-      sws_free_context(&sws_ctx);
-      return nullptr;
-    }
+  sws_ctx = sws_getCachedContext(sws_ctx, width, height, sourceFormat, width,
+                                 height, destinationFormat, SWS_BILINEAR, NULL,
+                                 NULL, NULL);
+  if (!sws_ctx) {
+    qDebug("Could not create scaling context");
+    return nullptr;
   }
 
   AVFrame *src_frame = av_frame_alloc();
@@ -87,14 +92,11 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
     return nullptr;
   }
 
-  // TODO: Update this to handle multiple formats with multiple planes
   src_frame->format = sourceFormat;
   src_frame->width = width;
   src_frame->height = height;
-  for (int i = 0; i < frameMetaData.plane_count; i++) {
-    src_frame->data[i] = const_cast<uint8_t *>(frame.bits(i));
-    src_frame->linesize[i] = frame.bytesPerLine(i);
-  }
+  src_frame->data[0] = const_cast<uint8_t *>(image.constBits());
+  src_frame->linesize[0] = image.bytesPerLine();
 
   dst_frame->format = destinationFormat;
   dst_frame->width = width;
@@ -127,7 +129,6 @@ AVFrame *FrameHandler::convertPixelFormat(const QVideoFrame &frame) {
     }
   }
 
-  // TODO: Remember to call av_frame_free on dst_frame
   av_frame_free(&src_frame);
 
   return dst_frame;
